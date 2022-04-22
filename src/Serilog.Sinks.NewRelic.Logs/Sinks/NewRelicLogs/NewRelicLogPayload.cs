@@ -11,7 +11,8 @@ namespace Serilog.Sinks.NewRelic.Logs
 
         public NewRelicLogPayload(string applicationName)
         {
-            this.Common.Attributes.Add("application", applicationName);
+            // New Relic uses the "service" attribute to show the "Service Name" in UI
+            this.Common.Attributes.Add("service", applicationName);
         }
 
         [JsonProperty("common")]
