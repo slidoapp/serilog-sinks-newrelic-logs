@@ -26,53 +26,48 @@ namespace Serilog.Sinks.NewRelic.Logs
 
         public static object Simplify(LogEventPropertyValue value)
         {
-            var scalar = value as ScalarValue;
-            if (scalar != null)
+            switch (value)
             {
-                return SimplifyScalar(scalar.Value);
-            }
+                case ScalarValue scalar:
+                    return SimplifyScalar(scalar.Value);
 
-            var dictionary = value as DictionaryValue;
-            if (dictionary != null)
-            {
-                var result = new Dictionary<object, object>();
-                foreach (var element in dictionary.Elements)
+                case DictionaryValue dictionary:
                 {
-                    var key = SimplifyScalar(element.Key.Value);
-                    if (result.ContainsKey(key))
+                    var result = new Dictionary<object, object>();
+                    foreach (var element in dictionary.Elements)
                     {
-                        Trace.WriteLine($"The key {element.Key} is not unique in the provided dictionary after simplification to {key}.");
-
-                        return dictionary.Elements.Select(e => new Dictionary<string, object>
+                        var key = SimplifyScalar(element.Key.Value);
+                        if (result.ContainsKey(key))
                         {
-                            { "Key", SimplifyScalar(e.Key.Value) },
-                            { "Value", Simplify(e.Value) }
-                        }).ToArray();
+                            Trace.WriteLine($"The key {element.Key} is not unique in the provided dictionary after simplification to {key}.");
+
+                            return dictionary.Elements.Select(e => new Dictionary<string, object>
+                            {
+                                { "Key", SimplifyScalar(e.Key.Value) },
+                                { "Value", Simplify(e.Value) }
+                            }).ToArray();
+                        }
+                        result.Add(key, Simplify(element.Value));
                     }
-                    result.Add(key, Simplify(element.Value));
+
+                    return result;
                 }
+                case SequenceValue sequence:
+                    return sequence.Elements.Select(Simplify).ToArray();
 
-                return result;
-            }
-
-            var sequence = value as SequenceValue;
-            if (sequence != null)
-            {
-                return sequence.Elements.Select(Simplify).ToArray();
-            }
-
-            var structure = value as StructureValue;
-            if (structure != null)
-            {
-                var props = structure.Properties.ToDictionary(p => p.Name, p => Simplify(p.Value));
-                if (structure.TypeTag != null)
+                case StructureValue structure:
                 {
-                    props["$typeTag"] = structure.TypeTag;
+                    var props = structure.Properties.ToDictionary(p => p.Name, p => Simplify(p.Value));
+                    if (structure.TypeTag != null)
+                    {
+                        props["$typeTag"] = structure.TypeTag;
+                    }
+                    return props;
                 }
-                return props;
-            }
 
-            return null;
+                default:
+                    return null;
+            }
         }
 
         private static object SimplifyScalar(object value)
@@ -83,12 +78,7 @@ namespace Serilog.Sinks.NewRelic.Logs
             }
 
             var valueType = value.GetType();
-            if (LogScalars.Contains(valueType))
-            {
-                return value;
-            }
-
-            return value.ToString();
+            return LogScalars.Contains(valueType) ? value : value.ToString();
         }
     }
 }

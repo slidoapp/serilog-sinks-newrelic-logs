@@ -1,9 +1,10 @@
-﻿using Serilog.Configuration;
-using Serilog.Core;
+﻿using System;
+using Serilog.Configuration;
 using Serilog.Events;
 using Serilog.Sinks.NewRelic.Logs;
-using System;
+using Serilog.Sinks.PeriodicBatching;
 
+// ReSharper disable once CheckNamespace
 namespace Serilog
 {
     /// <summary>
@@ -18,21 +19,19 @@ namespace Serilog
         /// <param name="applicationName">Application name in NewRelic. This can be either supplied here or through "NewRelic.AppName" appSettings</param>
         /// <param name="licenseKey">New Relic APM License key. Either "licenseKey" or "insertKey" must be provided.</param>
         /// <param name="insertKey">New Relic Insert API key. Either "licenseKey" or "insertKey" must be provided.</param>
+        /// <param name="enforceCamelCase">Converts all logged property names to their camelCase representation.</param>
         /// <param name="restrictedToMinimumLevel">The minimum log event level required 
         ///     in order to write an event to the sink.</param>
-        /// <param name="batchSizeLimit">The maximum number of events to include in a single batch. Default is 1000 entries.</param>
-        /// <param name="period">The time to wait between checking for event batches. TimeSpan with a default value of 2 seconds.</param>
         /// <returns></returns>
         public static LoggerConfiguration NewRelicLogs(
             this LoggerSinkConfiguration loggerSinkConfiguration,
-            string endpointUrl = "https://log-api.newrelic.com/log/v1",
+            string endpointUrl = NewRelicEndpoints.US,
             string applicationName = null,
             string licenseKey = null,
             string insertKey = null,
-            LogEventLevel restrictedToMinimumLevel = LevelAlias.Minimum,
-            int batchSizeLimit = NewRelicLogsSink.DefaultBatchSizeLimit,
-            TimeSpan? period = null
-            )
+            bool enforceCamelCase = false,
+            LogEventLevel restrictedToMinimumLevel = LevelAlias.Minimum
+        )
         {
             if (loggerSinkConfiguration == null)
             {
@@ -86,11 +85,11 @@ namespace Serilog
                 }
             }
 
-            var defaultPeriod = period ?? NewRelicLogsSink.DefaultPeriod;
-
-            ILogEventSink sink = new NewRelicLogsSink(endpointUrl, applicationName, licenseKey, insertKey, batchSizeLimit, defaultPeriod);
-
-            return loggerSinkConfiguration.Sink(sink, restrictedToMinimumLevel);
+            var sink = new NewRelicLogsSink(endpointUrl, applicationName, licenseKey, insertKey, enforceCamelCase);
+            var batchingOptions = new PeriodicBatchingSinkOptions(); // Use the default options
+            var batchingSink = new PeriodicBatchingSink(sink, batchingOptions);
+            
+            return loggerSinkConfiguration.Sink(batchingSink, restrictedToMinimumLevel);
         }
     }
 }

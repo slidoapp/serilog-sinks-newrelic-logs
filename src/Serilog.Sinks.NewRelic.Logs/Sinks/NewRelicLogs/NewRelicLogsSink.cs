@@ -10,15 +10,12 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using Newtonsoft.Json.Serialization;
 
 namespace Serilog.Sinks.NewRelic.Logs
 {
-    internal class NewRelicLogsSink : PeriodicBatchingSink
+    internal class NewRelicLogsSink : IBatchedLogEventSink
     {
-        public const int DefaultBatchSizeLimit = 1000;
-
-        public static readonly TimeSpan DefaultPeriod = TimeSpan.FromSeconds(2);
-
         public string EndpointUrl { get; }
 
         public string ApplicationName { get; }
@@ -29,24 +26,41 @@ namespace Serilog.Sinks.NewRelic.Logs
 
         private IFormatProvider FormatProvider { get; }
 
+        private JsonSerializerSettings JsonSerializerSettings { get; }
+
         public NewRelicLogsSink(
             string endpointUrl, 
             string applicationName, 
             string licenseKey, 
-            string insertKey, 
-            int batchSizeLimit, 
-            TimeSpan period, 
+            string insertKey,
+            bool enforceCamelCase,
             IFormatProvider formatProvider = null)
-            : base(batchSizeLimit, period)
         {
             this.EndpointUrl = endpointUrl;
             this.ApplicationName = applicationName;
             this.LicenseKey = licenseKey;
             this.InsertKey = insertKey;
             this.FormatProvider = formatProvider;
+            this.JsonSerializerSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore
+            };
+
+            if (enforceCamelCase)
+            {
+                var contractResolver = new CamelCasePropertyNamesContractResolver
+                {
+                    // Types which implements the ISerializable interface prevent the CamelCaseNamingStrategy
+                    // from being applied, so all fields are serialized in PascalCase. The workaround is to
+                    // ignore the ISerializable interface.
+                    IgnoreSerializableInterface = true
+                };
+
+                this.JsonSerializerSettings.ContractResolver = contractResolver;
+            }
         }
 
-        protected override async Task EmitBatchAsync(IEnumerable<LogEvent> eventsEnumerable)
+        public async Task EmitBatchAsync(IEnumerable<LogEvent> eventsEnumerable)
         {
             var payload = new NewRelicLogPayload(this.ApplicationName);
             var events = eventsEnumerable.ToList();
@@ -68,6 +82,11 @@ namespace Serilog.Sinks.NewRelic.Logs
             var body = Serialize(new List<object> { payload }, events.Count);
 
             await this.SendToNewRelicLogsAsync(body).ConfigureAwait(false);
+        }
+
+        public Task OnEmptyBatchAsync()
+        {
+            return Task.CompletedTask;
         }
 
         private Task SendToNewRelicLogsAsync(string body)
@@ -95,19 +114,15 @@ namespace Serilog.Sinks.NewRelic.Logs
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(this.LicenseKey))
-            {
-                request.Headers.Add("X-License-Key", this.LicenseKey);
-            }
-            else
-            {
-                request.Headers.Add("X-Insert-Key", this.InsertKey);
-            }
+            var apiKey = string.IsNullOrWhiteSpace(this.LicenseKey)
+                ? this.InsertKey
+                : this.LicenseKey;
 
+            request.Headers.Add("Api-Key", apiKey);
             request.Headers.Add("Content-Encoding", "gzip");
             request.Timeout = 40000; //It's basically fire-and-forget
             request.Credentials = CredentialCache.DefaultCredentials;
-            request.ContentType = "application/gzip";
+            request.ContentType = "application/json";
             request.Accept = "*/*";
             request.Method = "POST";
             request.KeepAlive = false;
@@ -145,9 +160,9 @@ namespace Serilog.Sinks.NewRelic.Logs
             }
         }
 
-        private static string Serialize(List<object> items, int count)
+        private string Serialize(List<object> items, int count)
         {
-            var serializer = new JsonSerializer();
+            var serializer = JsonSerializer.Create(this.JsonSerializerSettings);
 
             //Stipulate 500 bytes per log entry on average
             var json = new StringBuilder(count * 500);

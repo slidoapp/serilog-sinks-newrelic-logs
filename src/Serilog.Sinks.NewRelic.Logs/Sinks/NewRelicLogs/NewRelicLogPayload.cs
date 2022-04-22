@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Serilog.Events;
-using Serilog.Sinks.NewRelic.Logs.Sinks.NewRelicLogs;
 using System;
 using System.Collections.Generic;
 
@@ -36,13 +35,22 @@ namespace Serilog.Sinks.NewRelic.Logs
 
         public NewRelicLogItem(LogEvent logEvent, IFormatProvider formatProvider)
         {
-            this.Timestamp = logEvent.Timestamp.UtcDateTime.ToUnixTimestamp();
+            this.Timestamp = logEvent.Timestamp.ToUnixTimeMilliseconds();
             this.Message = logEvent.RenderMessage(formatProvider);
-            this.Attributes.Add("level", logEvent.Level.ToString());
-            this.Attributes.Add("stack_trace", logEvent.Exception?.StackTrace ?? "");
+
+            // New Relic assigns different colors based on the log level and it
+            // doesn't recognize the "Information" level, only "Info".
+            this.Attributes.Add("level", logEvent.Level == LogEventLevel.Information
+                ? "Info" 
+                : logEvent.Level.ToString());
+
+            // Include the ISO 8601 timestamp to preserve the timezone info.
+            this.Attributes.Add("iso8601Timestamp", logEvent.Timestamp);
+
             if (logEvent.Exception != null) 
             {
-                this.Attributes.Add("exception", logEvent.Exception.ToString() ?? "");
+                this.Attributes.Add("exception", logEvent.Exception.ToString());
+                this.Attributes.Add("stackTrace", logEvent.Exception.StackTrace);
             }
 
             foreach (var property in logEvent.Properties)
