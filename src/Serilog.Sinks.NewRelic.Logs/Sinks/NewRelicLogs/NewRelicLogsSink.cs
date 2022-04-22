@@ -107,7 +107,7 @@ namespace Serilog.Sinks.NewRelic.Logs
             request.Headers.Add("Content-Encoding", "gzip");
             request.Timeout = 40000; //It's basically fire-and-forget
             request.Credentials = CredentialCache.DefaultCredentials;
-            request.ContentType = "application/gzip";
+            request.ContentType = "application/json";
             request.Accept = "*/*";
             request.Method = "POST";
             request.KeepAlive = false;
