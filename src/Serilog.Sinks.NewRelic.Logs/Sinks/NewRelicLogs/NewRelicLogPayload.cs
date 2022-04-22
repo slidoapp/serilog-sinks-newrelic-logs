@@ -45,10 +45,13 @@ namespace Serilog.Sinks.NewRelic.Logs
                 ? "Info" 
                 : logEvent.Level.ToString());
 
-            this.Attributes.Add("stack_trace", logEvent.Exception?.StackTrace ?? "");
+            // Include the ISO 8601 timestamp to preserve the timezone info.
+            this.Attributes.Add("iso8601Timestamp", logEvent.Timestamp);
+
             if (logEvent.Exception != null) 
             {
-                this.Attributes.Add("exception", logEvent.Exception.ToString() ?? "");
+                this.Attributes.Add("exception", logEvent.Exception.ToString());
+                this.Attributes.Add("stackTrace", logEvent.Exception.StackTrace);
             }
 
             foreach (var property in logEvent.Properties)
