@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Serilog.Events;
-using Serilog.Sinks.NewRelic.Logs.Sinks.NewRelicLogs;
 using System;
 using System.Collections.Generic;
 
@@ -36,7 +35,7 @@ namespace Serilog.Sinks.NewRelic.Logs
 
         public NewRelicLogItem(LogEvent logEvent, IFormatProvider formatProvider)
         {
-            this.Timestamp = logEvent.Timestamp.UtcDateTime.ToUnixTimestamp();
+            this.Timestamp = logEvent.Timestamp.ToUnixTimeMilliseconds();
             this.Message = logEvent.RenderMessage(formatProvider);
             this.Attributes.Add("level", logEvent.Level.ToString());
             this.Attributes.Add("stack_trace", logEvent.Exception?.StackTrace ?? "");
