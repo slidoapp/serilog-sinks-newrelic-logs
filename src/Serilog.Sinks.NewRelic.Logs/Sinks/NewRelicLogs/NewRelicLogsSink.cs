@@ -95,15 +95,11 @@ namespace Serilog.Sinks.NewRelic.Logs
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(this.LicenseKey))
-            {
-                request.Headers.Add("X-License-Key", this.LicenseKey);
-            }
-            else
-            {
-                request.Headers.Add("X-Insert-Key", this.InsertKey);
-            }
+            var apiKey = string.IsNullOrWhiteSpace(this.LicenseKey)
+                ? this.InsertKey
+                : this.LicenseKey;
 
+            request.Headers.Add("Api-Key", apiKey);
             request.Headers.Add("Content-Encoding", "gzip");
             request.Timeout = 40000; //It's basically fire-and-forget
             request.Credentials = CredentialCache.DefaultCredentials;
