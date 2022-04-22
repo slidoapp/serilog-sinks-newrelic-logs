@@ -37,7 +37,13 @@ namespace Serilog.Sinks.NewRelic.Logs
         {
             this.Timestamp = logEvent.Timestamp.ToUnixTimeMilliseconds();
             this.Message = logEvent.RenderMessage(formatProvider);
-            this.Attributes.Add("level", logEvent.Level.ToString());
+
+            // New Relic assigns different colors based on the log level and it
+            // doesn't recognize the "Information" level, only "Info".
+            this.Attributes.Add("level", logEvent.Level == LogEventLevel.Information
+                ? "Info" 
+                : logEvent.Level.ToString());
+
             this.Attributes.Add("stack_trace", logEvent.Exception?.StackTrace ?? "");
             if (logEvent.Exception != null) 
             {
