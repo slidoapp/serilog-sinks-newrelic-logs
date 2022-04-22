@@ -25,7 +25,7 @@ namespace Serilog
         /// <returns></returns>
         public static LoggerConfiguration NewRelicLogs(
             this LoggerSinkConfiguration loggerSinkConfiguration,
-            string endpointUrl = "https://log-api.newrelic.com/log/v1",
+            string endpointUrl = NewRelicEndpoints.US,
             string applicationName = null,
             string licenseKey = null,
             string insertKey = null,
