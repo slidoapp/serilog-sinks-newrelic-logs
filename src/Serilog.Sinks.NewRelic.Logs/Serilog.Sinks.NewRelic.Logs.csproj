@@ -12,12 +12,12 @@
     <Copyright>2020 MIT License</Copyright>
     <PackageIconUrl>https://i.imgur.com/yDQoMRw.png</PackageIconUrl>
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
-	<ProjectGuid>{E2CEBBAF-6DF7-4AA9-815D-9AD4CF90C844}</ProjectGuid>
+    <ProjectGuid>{E2CEBBAF-6DF7-4AA9-815D-9AD4CF90C844}</ProjectGuid>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Serilog.Sinks.PeriodicBatching" Version="2.3.0" />
-    <PackageReference Include="Serilog" Version="2.10.0" />
+    <PackageReference Include="Serilog.Sinks.PeriodicBatching" Version="2.3.1" />
+    <PackageReference Include="Serilog" Version="2.11.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.0" />
   </ItemGroup>
