@@ -13,6 +13,7 @@
     <PackageIconUrl>https://i.imgur.com/yDQoMRw.png</PackageIconUrl>
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
     <ProjectGuid>{E2CEBBAF-6DF7-4AA9-815D-9AD4CF90C844}</ProjectGuid>
+	<Version>1.2.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
