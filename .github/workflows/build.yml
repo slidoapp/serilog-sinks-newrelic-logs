@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+
+    env:
+      DOTNET_NOLOGO: 1
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: false
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Setup
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 6.0.x
+
+    - name: Restore
+      run: |
+        nuget restore
+        dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore -c ${{ matrix.configuration }}
+
+    - name: Pack
+      run: dotnet pack --no-build -c ${{ matrix.configuration }} -o ${{ github.workspace }}/bin src\Serilog.Sinks.NewRelic.Logs\Serilog.Sinks.NewRelic.Logs.csproj
+
+    - name: Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: Serilog.Sinks.NewRelic.Logs_${{ matrix.configuration }}
+        path: ${{ github.workspace }}/bin/*.nupkg
