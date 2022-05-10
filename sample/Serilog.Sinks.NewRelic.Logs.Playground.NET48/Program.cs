@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Serilog.Sinks.NewRelic.Logs.Playground.NETCore31
+namespace Serilog.Sinks.NewRelic.Logs.Playground.NET48
 {
     class Program
     {

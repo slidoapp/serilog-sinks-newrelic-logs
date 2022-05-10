@@ -29,7 +29,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "git", "git", "{A58D3608-75B
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Serilog.Sinks.NewRelic.Logs.Playground.NETCore31", "sample\Serilog.Sinks.NewRelic.Logs.Playground.NETCore31\Serilog.Sinks.NewRelic.Logs.Playground.NETCore31.csproj", "{5BC5D9C8-EC0A-4CC7-9EAE-EBCE01916EE5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serilog.Sinks.NewRelic.Logs.Playground.NET461", "sample\Serilog.Sinks.NewRelic.Logs.Playground.NET461\Serilog.Sinks.NewRelic.Logs.Playground.NET461.csproj", "{21B9673F-0A6B-41E3-BFF1-3404A3318BDC}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Serilog.Sinks.NewRelic.Logs.Playground.NET48", "sample\Serilog.Sinks.NewRelic.Logs.Playground.NET48\Serilog.Sinks.NewRelic.Logs.Playground.NET48.csproj", "{21B9673F-0A6B-41E3-BFF1-3404A3318BDC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
