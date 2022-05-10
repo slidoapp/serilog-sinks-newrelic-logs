@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFrameworks>net462;netstandard2.0</TargetFrameworks>
     <Company>NewRelic</Company>
     <Authors>thiagobarradas, stanislav, johnkattenhorn</Authors>
     <RepositoryUrl>https://github.com/thiagobarradas/serilog-sinks-newrelic-logs</RepositoryUrl>

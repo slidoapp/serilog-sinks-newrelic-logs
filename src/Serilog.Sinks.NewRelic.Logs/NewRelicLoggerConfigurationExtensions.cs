@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Configuration;
 using Serilog.Configuration;
 using Serilog.Events;
 using Serilog.Sinks.NewRelic.Logs;
