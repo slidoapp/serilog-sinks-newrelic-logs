@@ -6,9 +6,9 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{21B9673F-0A6B-41E3-BFF1-3404A3318BDC}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>Serilog.Sinks.NewRelic.Logs.Playground.NET461</RootNamespace>
-    <AssemblyName>Serilog.Sinks.NewRelic.Logs.Playground.NET461</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <RootNamespace>Serilog.Sinks.NewRelic.Logs.Playground.NET48</RootNamespace>
+    <AssemblyName>Serilog.Sinks.NewRelic.Logs.Playground.NET48</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
