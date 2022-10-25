@@ -8,7 +8,7 @@
   <ItemGroup>
     <PackageReference Include="NewRelic.Agent.Api" Version="9.8.0" />
     <PackageReference Include="NewRelic.LogEnrichers.Serilog" Version="1.0.1" />
-    <PackageReference Include="Serilog.Enrichers.Context" Version="4.2.0" />
+    <PackageReference Include="Serilog.Enrichers.Context" Version="4.6.0" />
     <PackageReference Include="Serilog.Enrichers.Process" Version="2.0.2" />
     <PackageReference Include="Serilog.Enrichers.Thread" Version="3.1.0" />
     <PackageReference Include="Serilog.Sinks.ColoredConsole" Version="3.0.1" />
