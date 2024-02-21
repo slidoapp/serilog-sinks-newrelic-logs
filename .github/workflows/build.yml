@@ -20,10 +20,10 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Setup
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 6.0.x
 
@@ -39,7 +39,7 @@ jobs:
       run: dotnet pack --no-build -c ${{ matrix.configuration }} -o ${{ github.workspace }}/bin src\Serilog.Sinks.NewRelic.Logs\Serilog.Sinks.NewRelic.Logs.csproj
 
     - name: Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Serilog.Sinks.NewRelic.Logs_${{ matrix.configuration }}
         path: ${{ github.workspace }}/bin/*.nupkg
