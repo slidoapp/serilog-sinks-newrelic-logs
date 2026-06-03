@@ -1,0 +1,93 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: 1
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_GENERATE_ASPNET_CERTIFICATE: false
+  Configuration: Release
+  PackageId: Slido.Serilog.Sinks.NewRelic.Logs
+  PackageProject: src/Serilog.Sinks.NewRelic.Logs/Serilog.Sinks.NewRelic.Logs.csproj
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+      url: https://www.nuget.org/packages/Slido.Serilog.Sinks.NewRelic.Logs
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v6
+
+    - name: setup dotnet
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10.0.x
+
+    - name: resolve package version
+      id: version
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+
+        if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+          echo "Tag '${GITHUB_REF_NAME}' does not resolve to a valid NuGet package version." >&2
+          exit 1
+        fi
+
+        echo "package_version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: restore
+      run: dotnet restore "${{ env.PackageProject }}"
+
+    - name: build
+      run: >
+        dotnet build "${{ env.PackageProject }}"
+        --no-restore
+        -c "${{ env.Configuration }}"
+        -p:PackageId="${{ env.PackageId }}"
+        -p:PackageVersion="${{ steps.version.outputs.package_version }}"
+        -p:Version="${{ steps.version.outputs.package_version }}"
+
+    - name: pack
+      run: >
+        dotnet pack "${{ env.PackageProject }}"
+        --no-build
+        --no-restore
+        -c "${{ env.Configuration }}"
+        -o "${{ github.workspace }}/dist"
+        -p:PackageId="${{ env.PackageId }}"
+        -p:PackageVersion="${{ steps.version.outputs.package_version }}"
+        -p:Version="${{ steps.version.outputs.package_version }}"
+
+    - name: publish artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: Slido.Serilog.Sinks.NewRelic.Logs_packages
+        path: ${{ github.workspace }}/dist/*.nupkg
+
+    - name: authenticate nuget.org
+      uses: NuGet/login@v1
+      id: nuget
+      with:
+        user: ${{ secrets.NUGET_PUSH_USER }}
+
+    - name: publish
+      working-directory: ${{ github.workspace }}/dist
+      run: dotnet nuget push "*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+      env:
+        NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
