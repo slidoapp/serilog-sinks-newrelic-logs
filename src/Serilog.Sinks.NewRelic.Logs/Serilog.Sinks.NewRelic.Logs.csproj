@@ -4,13 +4,13 @@
     <TargetFrameworks>net462;net48;netstandard2.0</TargetFrameworks>
     <Company>NewRelic</Company>
     <Authors>thiagobarradas, stanislav, johnkattenhorn</Authors>
-    <RepositoryUrl>https://github.com/thiagobarradas/serilog-sinks-newrelic-logs</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/thiagobarradas/serilog-sinks-newrelic-logs</PackageProjectUrl>
-    <PackageLicenseUrl>https://github.com/thiagobarradas/serilog-sinks-newrelic-logs/blob/master/LICENSE</PackageLicenseUrl>
+    <RepositoryUrl>https://github.com/slidoapp/serilog-sinks-newrelic-logs/</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>serilog, logging, newrelic, log, newreliclogs, apm, metrics</PackageTags>
     <Description>A Serilog sink that writes events to NewRelic Logs API.</Description>
-    <Copyright>2020 MIT License</Copyright>
-    <PackageIconUrl>https://i.imgur.com/yDQoMRw.png</PackageIconUrl>
+    <Copyright>2020 MIT License; Copyright 2026 Cisco Systems, Inc. All rights reserved.</Copyright>
+    <PackageIcon>Icon.png</PackageIcon>
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
     <ProjectGuid>{E2CEBBAF-6DF7-4AA9-815D-9AD4CF90C844}</ProjectGuid>
 	<Version>1.2.1</Version>
@@ -21,6 +21,11 @@
     <PackageReference Include="Serilog" Version="3.1.1" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="Icon.png" Pack="true" PackagePath="/" />
   </ItemGroup>
 
 </Project>
