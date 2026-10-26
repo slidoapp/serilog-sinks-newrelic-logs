@@ -18,13 +18,16 @@ env:
   DOTNET_NOLOGO: 1
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_GENERATE_ASPNET_CERTIFICATE: false
+  ContinuousIntegrationBuild: true
   Configuration: Release
   PackageId: Slido.Serilog.Sinks.NewRelic.Logs
   PackageProject: src/Serilog.Sinks.NewRelic.Logs/Serilog.Sinks.NewRelic.Logs.csproj
+  TestProject: tests/Serilog.Sinks.NewRelic.Logs.Tests/Serilog.Sinks.NewRelic.Logs.Tests.csproj
+  KEYVAULT_URL: 'https://slido-codesigning-prod.vault.azure.net/'
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-2025
 
     environment:
       name: production
@@ -41,6 +44,7 @@ jobs:
 
     - name: resolve package version
       id: version
+      shell: bash
       run: |
         version="${GITHUB_REF_NAME#v}"
 
@@ -52,8 +56,13 @@ jobs:
         echo "package_version=$version" >> "$GITHUB_OUTPUT"
 
     - name: restore
-      run: dotnet restore "${{ env.PackageProject }}"
+      run: |
+        dotnet restore "${{ env.PackageProject }}"
+        dotnet restore "${{ env.TestProject }}"
 
+    # The tests are built with the same properties, so they test the library that gets
+    # published. Every build copies the library DLLs from obj to bin again, so signing
+    # must run after the last build and pack must use --no-build.
     - name: build
       run: >
         dotnet build "${{ env.PackageProject }}"
@@ -62,6 +71,78 @@ jobs:
         -p:PackageId="${{ env.PackageId }}"
         -p:PackageVersion="${{ steps.version.outputs.package_version }}"
         -p:Version="${{ steps.version.outputs.package_version }}"
+
+    - name: build tests
+      run: >
+        dotnet build "${{ env.TestProject }}"
+        --no-restore
+        -c "${{ env.Configuration }}"
+        -p:PackageId="${{ env.PackageId }}"
+        -p:PackageVersion="${{ steps.version.outputs.package_version }}"
+        -p:Version="${{ steps.version.outputs.package_version }}"
+
+    - name: test
+      run: dotnet test --project "${{ env.TestProject }}" --no-build -c "${{ env.Configuration }}"
+
+    # The azure/login action isn't on this repository's list of allowed actions, so the
+    # Azure CLI signs in with the job's OIDC token directly. AzureSignTool picks up the
+    # Azure CLI session the same way it does after azure/login in powerpoint-win.
+    - name: azure login
+      shell: pwsh
+      env:
+        KEYVAULT_CLIENT_ID: ${{ vars.KEYVAULT_CLIENT_ID }}
+        KEYVAULT_TENANT_ID: ${{ vars.KEYVAULT_TENANT_ID }}
+        SIGNING_CERTIFICATE_NAME: ${{ vars.SIGNING_CERTIFICATE_NAME }}
+      run: |
+        foreach ($name in 'KEYVAULT_CLIENT_ID', 'KEYVAULT_TENANT_ID', 'SIGNING_CERTIFICATE_NAME') {
+          if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+            Write-Error "The repository variable '$name' is not set."
+            exit 1
+          }
+        }
+
+        $tokenUrl = "$env:ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange"
+        $headers = @{ Authorization = "Bearer $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN" }
+        $token = (Invoke-RestMethod -Uri $tokenUrl -Headers $headers).value
+        Write-Output "::add-mask::$token"
+
+        az login --service-principal `
+          --username $env:KEYVAULT_CLIENT_ID `
+          --tenant $env:KEYVAULT_TENANT_ID `
+          --federated-token $token `
+          --allow-no-subscriptions `
+          --output none
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    - name: cache AzureSignTool
+      uses: actions/cache@v6
+      id: cache-azuresigntool
+      with:
+        path: ~/.dotnet/tools
+        key: azuresigntool-4.0.1
+
+    - name: install AzureSignTool
+      if: steps.cache-azuresigntool.outputs.cache-hit != 'true'
+      run: dotnet tool install --verbosity minimal --global azuresigntool --version 4.0.1
+
+    # Only the DLLs are signed. The NuGet package itself stays unsigned.
+    - name: sign
+      shell: pwsh
+      run: |
+        $dlls = Get-ChildItem "src/Serilog.Sinks.NewRelic.Logs/bin/${{ env.Configuration }}/*/Serilog.Sinks.NewRelic.Logs.dll"
+        if ($dlls.Count -eq 0) {
+          Write-Error "No library DLLs were found to sign."
+          exit 1
+        }
+
+        AzureSignTool.exe sign -du "https://slido.com" `
+          -kvu $env:KEYVAULT_URL `
+          -kvm `
+          -kvc "${{ vars.SIGNING_CERTIFICATE_NAME }}" `
+          -tr http://timestamp.digicert.com `
+          -v `
+          $dlls.FullName
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     - name: pack
       run: >
@@ -74,6 +155,31 @@ jobs:
         -p:PackageVersion="${{ steps.version.outputs.package_version }}"
         -p:Version="${{ steps.version.outputs.package_version }}"
 
+    - name: verify signatures
+      shell: pwsh
+      run: |
+        $extracted = Join-Path $env:RUNNER_TEMP "package"
+        $package = Get-ChildItem "${{ github.workspace }}/dist/*.nupkg" | Select-Object -First 1
+        Expand-Archive -Path $package.FullName -DestinationPath $extracted -Force
+
+        $dlls = Get-ChildItem -Path (Join-Path $extracted "lib") -Recurse -Filter "*.dll"
+        if ($dlls.Count -eq 0) {
+          Write-Error "The package $($package.Name) contains no DLLs."
+          exit 1
+        }
+
+        $failed = $false
+        foreach ($dll in $dlls) {
+          $signature = Get-AuthenticodeSignature $dll.FullName
+          Write-Output "$($dll.Directory.Name)/$($dll.Name): $($signature.Status) $($signature.SignerCertificate.Subject)"
+          if ($signature.Status -ne 'Valid') { $failed = $true }
+        }
+
+        if ($failed) {
+          Write-Error "The package $($package.Name) contains DLLs without a valid signature."
+          exit 1
+        }
+
     - name: publish artifact
       uses: actions/upload-artifact@v7
       with:
@@ -81,13 +187,13 @@ jobs:
         path: ${{ github.workspace }}/dist/*.nupkg
 
     - name: authenticate nuget.org
-      uses: NuGet/login@v1
+      uses: nuget/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
       id: nuget
       with:
         user: ${{ secrets.NUGET_PUSH_USER }}
 
     - name: publish
       working-directory: ${{ github.workspace }}/dist
-      run: dotnet nuget push "*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+      run: dotnet nuget push "*.nupkg" --api-key "$env:NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
       env:
         NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
