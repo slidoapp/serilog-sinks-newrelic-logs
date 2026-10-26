@@ -38,6 +38,9 @@ jobs:
     - name: Build
       run: dotnet build --no-restore -c ${{ matrix.configuration }}
 
+    - name: Test
+      run: dotnet test --no-build -c ${{ matrix.configuration }} tests\Serilog.Sinks.NewRelic.Logs.Tests\Serilog.Sinks.NewRelic.Logs.Tests.csproj
+
     - name: Pack
       run: dotnet pack --no-build -c ${{ matrix.configuration }} -o ${{ github.workspace }}/bin src\Serilog.Sinks.NewRelic.Logs\Serilog.Sinks.NewRelic.Logs.csproj
 
