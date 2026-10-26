@@ -119,11 +119,11 @@ jobs:
       id: cache-azuresigntool
       with:
         path: ~/.dotnet/tools
-        key: azuresigntool-4.0.1
+        key: azuresigntool-7.0.1
 
     - name: install AzureSignTool
       if: steps.cache-azuresigntool.outputs.cache-hit != 'true'
-      run: dotnet tool install --verbosity minimal --global azuresigntool --version 4.0.1
+      run: dotnet tool install --verbosity minimal --global azuresigntool --version 7.0.1
 
     # Only the DLLs are signed. The NuGet package itself stays unsigned.
     - name: sign
