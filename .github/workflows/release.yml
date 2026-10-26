@@ -94,19 +94,20 @@ jobs:
       run: dotnet test --project "${{ env.TestProject }}" --no-build -c "${{ env.Configuration }}"
 
     # The azure/login action isn't on this repository's list of allowed actions, so the
-    # Azure CLI signs in with the job's OIDC token directly. AzureSignTool picks up the
-    # Azure CLI session the same way it does after azure/login in powerpoint-win.
-    # The repository is public, so the signing settings are stored as secrets, which
-    # GitHub masks in the logs.
+    # Azure CLI signs in with the job's OIDC token directly. The repository is public, so
+    # the signing settings are stored as secrets, which GitHub masks in the logs. The
+    # secrets use the same names as the variables in powerpoint-win.
     - name: azure login
       shell: pwsh
       env:
         KEYVAULT_CLIENT_ID: ${{ secrets.KEYVAULT_CLIENT_ID }}
         KEYVAULT_TENANT_ID: ${{ secrets.KEYVAULT_TENANT_ID }}
-        KEYVAULT_URL: ${{ secrets.KEYVAULT_URL }}
-        SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+        TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+        TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
+        TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
       run: |
-        foreach ($name in 'KEYVAULT_CLIENT_ID', 'KEYVAULT_TENANT_ID', 'KEYVAULT_URL', 'SIGNING_CERTIFICATE_NAME') {
+        $names = 'KEYVAULT_CLIENT_ID', 'KEYVAULT_TENANT_ID', 'TRUSTED_SIGNING_ENDPOINT', 'TRUSTED_SIGNING_ACCOUNT_NAME', 'TRUSTED_SIGNING_CERTIFICATE_PROFILE'
+        foreach ($name in $names) {
           if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
             Write-Error "The repository secret '$name' is not set."
             exit 1
@@ -126,23 +127,17 @@ jobs:
           --output none
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    - name: cache AzureSignTool
-      uses: actions/cache@v6
-      id: cache-azuresigntool
-      with:
-        path: ~/.dotnet/tools
-        key: azuresigntool-7.0.1
-
-    - name: install AzureSignTool
-      if: steps.cache-azuresigntool.outputs.cache-hit != 'true'
-      run: dotnet tool install --verbosity minimal --global azuresigntool --version 7.0.1
-
-    # Only the DLLs are signed. The NuGet package itself stays unsigned.
+    # The azure/artifact-signing-action isn't allowed either, so this step installs the
+    # ArtifactSigning module that the action uses and calls it with the same settings as
+    # the "Sign CefSharp binaries" step in powerpoint-win. The module signs in through the
+    # Azure CLI session from the previous step. Only the DLLs are signed, and the NuGet
+    # package itself stays unsigned.
     - name: sign
       shell: pwsh
       env:
-        KEYVAULT_URL: ${{ secrets.KEYVAULT_URL }}
-        SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
+        TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+        TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
+        TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
       run: |
         $dlls = Get-ChildItem "src/Serilog.Sinks.NewRelic.Logs/bin/${{ env.Configuration }}/*/Serilog.Sinks.NewRelic.Logs.dll"
         if ($dlls.Count -eq 0) {
@@ -150,14 +145,28 @@ jobs:
           exit 1
         }
 
-        AzureSignTool.exe sign -du "https://slido.com" `
-          -kvu $env:KEYVAULT_URL `
-          -kvm `
-          -kvc $env:SIGNING_CERTIFICATE_NAME `
-          -tr http://timestamp.digicert.com `
-          -v `
-          $dlls.FullName
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        Install-Module -Name ArtifactSigning -RequiredVersion 0.1.8 -Repository PSGallery -Force
+
+        $params = @{
+          Endpoint = $env:TRUSTED_SIGNING_ENDPOINT
+          CodeSigningAccountName = $env:TRUSTED_SIGNING_ACCOUNT_NAME
+          CertificateProfileName = $env:TRUSTED_SIGNING_CERTIFICATE_PROFILE
+          Files = ($dlls.FullName -join ',')
+          FileDigest = 'SHA256'
+          TimestampRfc3161 = 'http://timestamp.acs.microsoft.com'
+          TimestampDigest = 'SHA256'
+          ExcludeEnvironmentCredential = $true
+          ExcludeWorkloadIdentityCredential = $true
+          ExcludeManagedIdentityCredential = $true
+          ExcludeSharedTokenCacheCredential = $true
+          ExcludeVisualStudioCredential = $true
+          ExcludeVisualStudioCodeCredential = $true
+          ExcludeAzurePowerShellCredential = $true
+          ExcludeAzureDeveloperCliCredential = $true
+          ExcludeInteractiveBrowserCredential = $true
+        }
+
+        Invoke-ArtifactSigning @params
 
     - name: pack
       run: >
