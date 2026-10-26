@@ -5,6 +5,9 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
       - 'v[0-9]+.[0-9]+.[0-9]+-*'
+  # A manual run tests the whole pipeline and publishes a preview package, whose
+  # version is the project version with a -preview-<run number> suffix.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,13 +21,16 @@ env:
   DOTNET_NOLOGO: 1
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_GENERATE_ASPNET_CERTIFICATE: false
-  Configuration: Release
-  PackageId: Slido.Serilog.Sinks.NewRelic.Logs
-  PackageProject: src/Serilog.Sinks.NewRelic.Logs/Serilog.Sinks.NewRelic.Logs.csproj
+  ContinuousIntegrationBuild: true
+  # MSBuild reads every environment variable as a property, so these names must not
+  # match MSBuild properties such as PackageId or Configuration.
+  BUILD_CONFIGURATION: Release
+  PACKAGE_PROJECT: src/Serilog.Sinks.NewRelic.Logs/Serilog.Sinks.NewRelic.Logs.csproj
+  TEST_PROJECT: tests/Serilog.Sinks.NewRelic.Logs.Tests/Serilog.Sinks.NewRelic.Logs.Tests.csproj
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-2025-vs2026
 
     environment:
       name: production
@@ -41,38 +47,160 @@ jobs:
 
     - name: resolve package version
       id: version
+      shell: bash
       run: |
-        version="${GITHUB_REF_NAME#v}"
+        if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+          version="${GITHUB_REF_NAME#v}"
+        else
+          project_version="$(dotnet msbuild "${{ env.PACKAGE_PROJECT }}" -getProperty:Version | tr -d '\r')"
+          version="${project_version}-preview-${GITHUB_RUN_NUMBER}"
+        fi
 
         if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-          echo "Tag '${GITHUB_REF_NAME}' does not resolve to a valid NuGet package version." >&2
+          echo "'${GITHUB_REF_NAME}' does not resolve to a valid NuGet package version: '${version}'." >&2
           exit 1
         fi
+
+        echo "Package version: $version"
 
         echo "package_version=$version" >> "$GITHUB_OUTPUT"
 
     - name: restore
-      run: dotnet restore "${{ env.PackageProject }}"
+      run: |
+        dotnet restore "${{ env.PACKAGE_PROJECT }}"
+        dotnet restore "${{ env.TEST_PROJECT }}"
 
+    # The tests are built with the same properties, so they test the library that gets
+    # published. Every build copies the library DLLs from obj to bin again, so signing
+    # must run after the last build and pack must use --no-build.
     - name: build
       run: >
-        dotnet build "${{ env.PackageProject }}"
+        dotnet build "${{ env.PACKAGE_PROJECT }}"
         --no-restore
-        -c "${{ env.Configuration }}"
-        -p:PackageId="${{ env.PackageId }}"
+        -c "${{ env.BUILD_CONFIGURATION }}"
         -p:PackageVersion="${{ steps.version.outputs.package_version }}"
         -p:Version="${{ steps.version.outputs.package_version }}"
+
+    - name: build tests
+      run: >
+        dotnet build "${{ env.TEST_PROJECT }}"
+        --no-restore
+        -c "${{ env.BUILD_CONFIGURATION }}"
+        -p:PackageVersion="${{ steps.version.outputs.package_version }}"
+        -p:Version="${{ steps.version.outputs.package_version }}"
+
+    - name: test
+      run: dotnet test --project "${{ env.TEST_PROJECT }}" --no-build -c "${{ env.BUILD_CONFIGURATION }}"
+
+    # The azure/login action isn't on this repository's list of allowed actions, so the
+    # Azure CLI signs in with the job's OIDC token directly. The repository is public, so
+    # the signing settings are stored as secrets, which GitHub masks in the logs. The
+    # secrets use the same names as the variables in powerpoint-win.
+    - name: azure login
+      shell: pwsh
+      env:
+        KEYVAULT_CLIENT_ID: ${{ secrets.KEYVAULT_CLIENT_ID }}
+        KEYVAULT_TENANT_ID: ${{ secrets.KEYVAULT_TENANT_ID }}
+        TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+        TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
+        TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
+      run: |
+        $names = 'KEYVAULT_CLIENT_ID', 'KEYVAULT_TENANT_ID', 'TRUSTED_SIGNING_ENDPOINT', 'TRUSTED_SIGNING_ACCOUNT_NAME', 'TRUSTED_SIGNING_CERTIFICATE_PROFILE'
+        foreach ($name in $names) {
+          if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+            Write-Error "The repository secret '$name' is not set."
+            exit 1
+          }
+        }
+
+        $tokenUrl = "$env:ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange"
+        $headers = @{ Authorization = "Bearer $env:ACTIONS_ID_TOKEN_REQUEST_TOKEN" }
+        $token = (Invoke-RestMethod -Uri $tokenUrl -Headers $headers).value
+        Write-Output "::add-mask::$token"
+
+        az login --service-principal `
+          --username $env:KEYVAULT_CLIENT_ID `
+          --tenant $env:KEYVAULT_TENANT_ID `
+          --federated-token $token `
+          --allow-no-subscriptions `
+          --output none
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    # The azure/artifact-signing-action isn't allowed either, so this step installs the
+    # ArtifactSigning module that the action uses and calls it with the same settings as
+    # the "Sign CefSharp binaries" step in powerpoint-win. The module signs in through the
+    # Azure CLI session from the previous step. Only the DLLs are signed, and the NuGet
+    # package itself stays unsigned.
+    - name: sign
+      shell: pwsh
+      env:
+        TRUSTED_SIGNING_ENDPOINT: ${{ secrets.TRUSTED_SIGNING_ENDPOINT }}
+        TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
+        TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
+      run: |
+        $dlls = Get-ChildItem "src/Serilog.Sinks.NewRelic.Logs/bin/${{ env.BUILD_CONFIGURATION }}/*/Serilog.Sinks.NewRelic.Logs.dll"
+        if ($dlls.Count -eq 0) {
+          Write-Error "No library DLLs were found to sign."
+          exit 1
+        }
+
+        Install-Module -Name ArtifactSigning -RequiredVersion 0.1.8 -Repository PSGallery -Force
+
+        $params = @{
+          Endpoint = $env:TRUSTED_SIGNING_ENDPOINT
+          CodeSigningAccountName = $env:TRUSTED_SIGNING_ACCOUNT_NAME
+          CertificateProfileName = $env:TRUSTED_SIGNING_CERTIFICATE_PROFILE
+          Files = ($dlls.FullName -join ',')
+          FileDigest = 'SHA256'
+          TimestampRfc3161 = 'http://timestamp.acs.microsoft.com'
+          TimestampDigest = 'SHA256'
+          ExcludeEnvironmentCredential = $true
+          ExcludeWorkloadIdentityCredential = $true
+          ExcludeManagedIdentityCredential = $true
+          ExcludeSharedTokenCacheCredential = $true
+          ExcludeVisualStudioCredential = $true
+          ExcludeVisualStudioCodeCredential = $true
+          ExcludeAzurePowerShellCredential = $true
+          ExcludeAzureDeveloperCliCredential = $true
+          ExcludeInteractiveBrowserCredential = $true
+        }
+
+        Invoke-ArtifactSigning @params
 
     - name: pack
       run: >
-        dotnet pack "${{ env.PackageProject }}"
+        dotnet pack "${{ env.PACKAGE_PROJECT }}"
         --no-build
         --no-restore
-        -c "${{ env.Configuration }}"
+        -c "${{ env.BUILD_CONFIGURATION }}"
         -o "${{ github.workspace }}/dist"
-        -p:PackageId="${{ env.PackageId }}"
         -p:PackageVersion="${{ steps.version.outputs.package_version }}"
         -p:Version="${{ steps.version.outputs.package_version }}"
+
+    - name: verify signatures
+      shell: pwsh
+      run: |
+        $extracted = Join-Path $env:RUNNER_TEMP "package"
+        $package = Get-ChildItem "${{ github.workspace }}/dist/*.nupkg" | Select-Object -First 1
+        Expand-Archive -Path $package.FullName -DestinationPath $extracted -Force
+
+        $dlls = Get-ChildItem -Path (Join-Path $extracted "lib") -Recurse -Filter "*.dll"
+        if ($dlls.Count -eq 0) {
+          Write-Error "The package $($package.Name) contains no DLLs."
+          exit 1
+        }
+
+        $failed = $false
+        foreach ($dll in $dlls) {
+          $signature = Get-AuthenticodeSignature $dll.FullName
+          Write-Output "$($dll.Directory.Name)/$($dll.Name): $($signature.Status) $($signature.SignerCertificate.Subject)"
+          if ($signature.Status -ne 'Valid') { $failed = $true }
+        }
+
+        if ($failed) {
+          Write-Error "The package $($package.Name) contains DLLs without a valid signature."
+          exit 1
+        }
 
     - name: publish artifact
       uses: actions/upload-artifact@v7
@@ -81,13 +209,13 @@ jobs:
         path: ${{ github.workspace }}/dist/*.nupkg
 
     - name: authenticate nuget.org
-      uses: NuGet/login@v1
+      uses: nuget/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
       id: nuget
       with:
         user: ${{ secrets.NUGET_PUSH_USER }}
 
     - name: publish
       working-directory: ${{ github.workspace }}/dist
-      run: dotnet nuget push "*.nupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+      run: dotnet nuget push "*.nupkg" --api-key "$env:NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
       env:
         NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}

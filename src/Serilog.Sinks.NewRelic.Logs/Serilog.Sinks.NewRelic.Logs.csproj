@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>net462;net48;netstandard2.0</TargetFrameworks>
+    <PackageId>Slido.Serilog.Sinks.NewRelic.Logs</PackageId>
     <Company>NewRelic</Company>
     <Authors>thiagobarradas, stanislav, johnkattenhorn</Authors>
     <RepositoryUrl>https://github.com/slidoapp/serilog-sinks-newrelic-logs/</RepositoryUrl>
