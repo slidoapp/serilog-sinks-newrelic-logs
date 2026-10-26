@@ -26,7 +26,6 @@ env:
   PackageId: Slido.Serilog.Sinks.NewRelic.Logs
   PackageProject: src/Serilog.Sinks.NewRelic.Logs/Serilog.Sinks.NewRelic.Logs.csproj
   TestProject: tests/Serilog.Sinks.NewRelic.Logs.Tests/Serilog.Sinks.NewRelic.Logs.Tests.csproj
-  KEYVAULT_URL: 'https://slido-codesigning-prod.vault.azure.net/'
 
 jobs:
   release:
@@ -97,16 +96,19 @@ jobs:
     # The azure/login action isn't on this repository's list of allowed actions, so the
     # Azure CLI signs in with the job's OIDC token directly. AzureSignTool picks up the
     # Azure CLI session the same way it does after azure/login in powerpoint-win.
+    # The repository is public, so the signing settings are stored as secrets, which
+    # GitHub masks in the logs.
     - name: azure login
       shell: pwsh
       env:
-        KEYVAULT_CLIENT_ID: ${{ vars.KEYVAULT_CLIENT_ID }}
-        KEYVAULT_TENANT_ID: ${{ vars.KEYVAULT_TENANT_ID }}
-        SIGNING_CERTIFICATE_NAME: ${{ vars.SIGNING_CERTIFICATE_NAME }}
+        KEYVAULT_CLIENT_ID: ${{ secrets.KEYVAULT_CLIENT_ID }}
+        KEYVAULT_TENANT_ID: ${{ secrets.KEYVAULT_TENANT_ID }}
+        KEYVAULT_URL: ${{ secrets.KEYVAULT_URL }}
+        SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
       run: |
-        foreach ($name in 'KEYVAULT_CLIENT_ID', 'KEYVAULT_TENANT_ID', 'SIGNING_CERTIFICATE_NAME') {
+        foreach ($name in 'KEYVAULT_CLIENT_ID', 'KEYVAULT_TENANT_ID', 'KEYVAULT_URL', 'SIGNING_CERTIFICATE_NAME') {
           if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
-            Write-Error "The repository variable '$name' is not set."
+            Write-Error "The repository secret '$name' is not set."
             exit 1
           }
         }
@@ -138,6 +140,9 @@ jobs:
     # Only the DLLs are signed. The NuGet package itself stays unsigned.
     - name: sign
       shell: pwsh
+      env:
+        KEYVAULT_URL: ${{ secrets.KEYVAULT_URL }}
+        SIGNING_CERTIFICATE_NAME: ${{ secrets.SIGNING_CERTIFICATE_NAME }}
       run: |
         $dlls = Get-ChildItem "src/Serilog.Sinks.NewRelic.Logs/bin/${{ env.Configuration }}/*/Serilog.Sinks.NewRelic.Logs.dll"
         if ($dlls.Count -eq 0) {
@@ -148,7 +153,7 @@ jobs:
         AzureSignTool.exe sign -du "https://slido.com" `
           -kvu $env:KEYVAULT_URL `
           -kvm `
-          -kvc "${{ vars.SIGNING_CERTIFICATE_NAME }}" `
+          -kvc $env:SIGNING_CERTIFICATE_NAME `
           -tr http://timestamp.digicert.com `
           -v `
           $dlls.FullName
