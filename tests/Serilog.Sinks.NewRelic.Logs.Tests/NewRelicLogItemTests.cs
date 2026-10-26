@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Newtonsoft.Json;
 using Serilog.Events;
 using Serilog.Parsing;
 using Xunit;
@@ -38,7 +39,14 @@ namespace Serilog.Sinks.NewRelic.Logs.Tests
             var item = new NewRelicLogItem(CreateEvent(LogEventLevel.Information), null);
 
             Assert.Equal(Timestamp.ToUnixTimeMilliseconds(), item.Timestamp);
-            Assert.Equal(Timestamp, item.Attributes["iso8601Timestamp"]);
+
+            // DateTimeOffset equality ignores the offset, so EqualsExact and the serialized
+            // value check that the original +01:00 offset is kept.
+            var iso8601Timestamp = Assert.IsType<DateTimeOffset>(item.Attributes["iso8601Timestamp"]);
+            Assert.True(Timestamp.EqualsExact(iso8601Timestamp), $"Expected {Timestamp:o}, got {iso8601Timestamp:o}.");
+
+            var json = JsonConvert.SerializeObject(item);
+            Assert.Contains("\"iso8601Timestamp\":\"2026-10-26T14:30:15.123+01:00\"", json);
         }
 
         [Fact]
