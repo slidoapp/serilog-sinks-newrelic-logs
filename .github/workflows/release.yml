@@ -22,10 +22,11 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_GENERATE_ASPNET_CERTIFICATE: false
   ContinuousIntegrationBuild: true
-  Configuration: Release
-  PackageId: Slido.Serilog.Sinks.NewRelic.Logs
-  PackageProject: src/Serilog.Sinks.NewRelic.Logs/Serilog.Sinks.NewRelic.Logs.csproj
-  TestProject: tests/Serilog.Sinks.NewRelic.Logs.Tests/Serilog.Sinks.NewRelic.Logs.Tests.csproj
+  # MSBuild reads every environment variable as a property, so these names must not
+  # match MSBuild properties such as PackageId or Configuration.
+  BUILD_CONFIGURATION: Release
+  PACKAGE_PROJECT: src/Serilog.Sinks.NewRelic.Logs/Serilog.Sinks.NewRelic.Logs.csproj
+  TEST_PROJECT: tests/Serilog.Sinks.NewRelic.Logs.Tests/Serilog.Sinks.NewRelic.Logs.Tests.csproj
 
 jobs:
   release:
@@ -51,7 +52,7 @@ jobs:
         if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
           version="${GITHUB_REF_NAME#v}"
         else
-          project_version="$(dotnet msbuild "${{ env.PackageProject }}" -getProperty:Version | tr -d '\r')"
+          project_version="$(dotnet msbuild "${{ env.PACKAGE_PROJECT }}" -getProperty:Version | tr -d '\r')"
           version="${project_version}-preview-${GITHUB_RUN_NUMBER}"
         fi
 
@@ -66,32 +67,30 @@ jobs:
 
     - name: restore
       run: |
-        dotnet restore "${{ env.PackageProject }}"
-        dotnet restore "${{ env.TestProject }}"
+        dotnet restore "${{ env.PACKAGE_PROJECT }}"
+        dotnet restore "${{ env.TEST_PROJECT }}"
 
     # The tests are built with the same properties, so they test the library that gets
     # published. Every build copies the library DLLs from obj to bin again, so signing
     # must run after the last build and pack must use --no-build.
     - name: build
       run: >
-        dotnet build "${{ env.PackageProject }}"
+        dotnet build "${{ env.PACKAGE_PROJECT }}"
         --no-restore
-        -c "${{ env.Configuration }}"
-        -p:PackageId="${{ env.PackageId }}"
+        -c "${{ env.BUILD_CONFIGURATION }}"
         -p:PackageVersion="${{ steps.version.outputs.package_version }}"
         -p:Version="${{ steps.version.outputs.package_version }}"
 
     - name: build tests
       run: >
-        dotnet build "${{ env.TestProject }}"
+        dotnet build "${{ env.TEST_PROJECT }}"
         --no-restore
-        -c "${{ env.Configuration }}"
-        -p:PackageId="${{ env.PackageId }}"
+        -c "${{ env.BUILD_CONFIGURATION }}"
         -p:PackageVersion="${{ steps.version.outputs.package_version }}"
         -p:Version="${{ steps.version.outputs.package_version }}"
 
     - name: test
-      run: dotnet test --project "${{ env.TestProject }}" --no-build -c "${{ env.Configuration }}"
+      run: dotnet test --project "${{ env.TEST_PROJECT }}" --no-build -c "${{ env.BUILD_CONFIGURATION }}"
 
     # The azure/login action isn't on this repository's list of allowed actions, so the
     # Azure CLI signs in with the job's OIDC token directly. The repository is public, so
@@ -139,7 +138,7 @@ jobs:
         TRUSTED_SIGNING_ACCOUNT_NAME: ${{ secrets.TRUSTED_SIGNING_ACCOUNT_NAME }}
         TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ secrets.TRUSTED_SIGNING_CERTIFICATE_PROFILE }}
       run: |
-        $dlls = Get-ChildItem "src/Serilog.Sinks.NewRelic.Logs/bin/${{ env.Configuration }}/*/Serilog.Sinks.NewRelic.Logs.dll"
+        $dlls = Get-ChildItem "src/Serilog.Sinks.NewRelic.Logs/bin/${{ env.BUILD_CONFIGURATION }}/*/Serilog.Sinks.NewRelic.Logs.dll"
         if ($dlls.Count -eq 0) {
           Write-Error "No library DLLs were found to sign."
           exit 1
@@ -170,12 +169,11 @@ jobs:
 
     - name: pack
       run: >
-        dotnet pack "${{ env.PackageProject }}"
+        dotnet pack "${{ env.PACKAGE_PROJECT }}"
         --no-build
         --no-restore
-        -c "${{ env.Configuration }}"
+        -c "${{ env.BUILD_CONFIGURATION }}"
         -o "${{ github.workspace }}/dist"
-        -p:PackageId="${{ env.PackageId }}"
         -p:PackageVersion="${{ steps.version.outputs.package_version }}"
         -p:Version="${{ steps.version.outputs.package_version }}"
 
