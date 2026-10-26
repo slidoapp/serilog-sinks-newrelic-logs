@@ -27,7 +27,7 @@ env:
 
 jobs:
   release:
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
 
     environment:
       name: production
