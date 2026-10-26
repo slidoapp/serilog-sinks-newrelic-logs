@@ -1,49 +1,52 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Serilog.Events;
-using Xunit;
 
 namespace Serilog.Sinks.NewRelic.Logs.Tests
 {
     public class NewRelicPropertyFormatterTests
     {
-        [Fact]
-        public void NumericScalarsKeepTheirType()
+        [Test]
+        public async Task NumericScalarsKeepTheirType()
         {
-            Assert.Equal(42, NewRelicPropertyFormatter.Simplify(new ScalarValue(42)));
-            Assert.Equal(true, NewRelicPropertyFormatter.Simplify(new ScalarValue(true)));
+            await Assert.That(NewRelicPropertyFormatter.Simplify(new ScalarValue(42))).IsEqualTo(42);
+            await Assert.That((bool)NewRelicPropertyFormatter.Simplify(new ScalarValue(true))).IsTrue();
         }
 
-        [Fact]
-        public void OtherScalarsAreConvertedToString()
+        [Test]
+        public async Task OtherScalarsAreConvertedToString()
         {
-            var id = System.Guid.NewGuid();
+            var id = Guid.NewGuid();
 
-            Assert.Equal(id.ToString(), NewRelicPropertyFormatter.Simplify(new ScalarValue(id)));
+            await Assert.That(NewRelicPropertyFormatter.Simplify(new ScalarValue(id))).IsEqualTo(id.ToString());
         }
 
-        [Fact]
-        public void NullScalarStaysNull()
+        [Test]
+        public async Task NullScalarStaysNull()
         {
-            Assert.Null(NewRelicPropertyFormatter.Simplify(new ScalarValue(null)));
+            await Assert.That(NewRelicPropertyFormatter.Simplify(new ScalarValue(null))).IsNull();
         }
 
-        [Fact]
-        public void SequenceIsConvertedToArray()
+        [Test]
+        public async Task SequenceIsConvertedToArray()
         {
             var sequence = new SequenceValue(new[] { new ScalarValue(1), new ScalarValue(2) });
 
-            Assert.Equal(new object[] { 1, 2 }, NewRelicPropertyFormatter.Simplify(sequence));
+            var result = (object[])NewRelicPropertyFormatter.Simplify(sequence);
+
+            await Assert.That(result).IsEquivalentTo(new object[] { 1, 2 });
         }
 
-        [Fact]
-        public void StructureIsConvertedToDictionaryWithTypeTag()
+        [Test]
+        public async Task StructureIsConvertedToDictionaryWithTypeTag()
         {
             var structure = new StructureValue(new[] { new LogEventProperty("Width", new ScalarValue(16)) }, "Size");
 
-            var result = Assert.IsType<Dictionary<string, object>>(NewRelicPropertyFormatter.Simplify(structure));
+            var result = (Dictionary<string, object>)NewRelicPropertyFormatter.Simplify(structure);
 
-            Assert.Equal(16, result["Width"]);
-            Assert.Equal("Size", result["$typeTag"]);
+            await Assert.That(result["Width"]).IsEqualTo(16);
+            await Assert.That(result["$typeTag"]).IsEqualTo("Size");
         }
     }
 }

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Serilog.Events;
 using Serilog.Parsing;
-using Xunit;
 
 namespace Serilog.Sinks.NewRelic.Logs.Tests
 {
@@ -12,75 +12,75 @@ namespace Serilog.Sinks.NewRelic.Logs.Tests
     {
         private static readonly DateTimeOffset Timestamp = new DateTimeOffset(2026, 10, 26, 14, 30, 15, 123, TimeSpan.FromHours(1));
 
-        [Fact]
-        public void InformationLevelIsSentAsInfo()
+        [Test]
+        public async Task InformationLevelIsSentAsInfo()
         {
             var item = new NewRelicLogItem(CreateEvent(LogEventLevel.Information), null);
 
-            Assert.Equal("Info", item.Attributes["level"]);
+            await Assert.That(item.Attributes["level"]).IsEqualTo("Info");
         }
 
-        [Theory]
-        [InlineData(LogEventLevel.Verbose)]
-        [InlineData(LogEventLevel.Debug)]
-        [InlineData(LogEventLevel.Warning)]
-        [InlineData(LogEventLevel.Error)]
-        [InlineData(LogEventLevel.Fatal)]
-        public void OtherLevelsKeepTheirSerilogName(LogEventLevel level)
+        [Test]
+        [Arguments(LogEventLevel.Verbose)]
+        [Arguments(LogEventLevel.Debug)]
+        [Arguments(LogEventLevel.Warning)]
+        [Arguments(LogEventLevel.Error)]
+        [Arguments(LogEventLevel.Fatal)]
+        public async Task OtherLevelsKeepTheirSerilogName(LogEventLevel level)
         {
             var item = new NewRelicLogItem(CreateEvent(level), null);
 
-            Assert.Equal(level.ToString(), item.Attributes["level"]);
+            await Assert.That(item.Attributes["level"]).IsEqualTo(level.ToString());
         }
 
-        [Fact]
-        public void TimestampIsSentAsUnixMillisecondsWithTheOriginalOffset()
+        [Test]
+        public async Task TimestampIsSentAsUnixMillisecondsWithTheOriginalOffset()
         {
             var item = new NewRelicLogItem(CreateEvent(LogEventLevel.Information), null);
 
-            Assert.Equal(Timestamp.ToUnixTimeMilliseconds(), item.Timestamp);
+            await Assert.That(item.Timestamp).IsEqualTo(Timestamp.ToUnixTimeMilliseconds());
 
             // DateTimeOffset equality ignores the offset, so EqualsExact and the serialized
             // value check that the original +01:00 offset is kept.
-            var iso8601Timestamp = Assert.IsType<DateTimeOffset>(item.Attributes["iso8601Timestamp"]);
-            Assert.True(Timestamp.EqualsExact(iso8601Timestamp), $"Expected {Timestamp:o}, got {iso8601Timestamp:o}.");
+            var iso8601Timestamp = (DateTimeOffset)item.Attributes["iso8601Timestamp"];
+            await Assert.That(Timestamp.EqualsExact(iso8601Timestamp)).IsTrue();
 
             var json = JsonConvert.SerializeObject(item);
-            Assert.Contains("\"iso8601Timestamp\":\"2026-10-26T14:30:15.123+01:00\"", json);
+            await Assert.That(json).Contains("\"iso8601Timestamp\":\"2026-10-26T14:30:15.123+01:00\"");
         }
 
-        [Fact]
-        public void MessageIsRendered()
+        [Test]
+        public async Task MessageIsRendered()
         {
             var properties = new[] { new LogEventProperty("Name", new ScalarValue("Slido")) };
             var item = new NewRelicLogItem(CreateEvent(LogEventLevel.Information, "Hello {Name}", properties: properties), null);
 
-            Assert.Equal("Hello \"Slido\"", item.Message);
-            Assert.Equal("Slido", item.Attributes["Name"]);
+            await Assert.That(item.Message).IsEqualTo("Hello \"Slido\"");
+            await Assert.That(item.Attributes["Name"]).IsEqualTo("Slido");
         }
 
-        [Fact]
-        public void ExceptionAddsExceptionAndStackTrace()
+        [Test]
+        public async Task ExceptionAddsExceptionAndStackTrace()
         {
             var exception = CreateThrownException();
             var item = new NewRelicLogItem(CreateEvent(LogEventLevel.Error, exception: exception), null);
 
-            Assert.Equal(exception.ToString(), item.Attributes["exception"]);
-            Assert.Equal(exception.StackTrace, item.Attributes["stackTrace"]);
-            Assert.False(item.Attributes.ContainsKey("stack_trace"));
+            await Assert.That(item.Attributes["exception"]).IsEqualTo(exception.ToString());
+            await Assert.That(item.Attributes["stackTrace"]).IsEqualTo(exception.StackTrace);
+            await Assert.That(item.Attributes.ContainsKey("stack_trace")).IsFalse();
         }
 
-        [Fact]
-        public void EventWithoutExceptionHasNoExceptionAttributes()
+        [Test]
+        public async Task EventWithoutExceptionHasNoExceptionAttributes()
         {
             var item = new NewRelicLogItem(CreateEvent(LogEventLevel.Information), null);
 
-            Assert.False(item.Attributes.ContainsKey("exception"));
-            Assert.False(item.Attributes.ContainsKey("stackTrace"));
+            await Assert.That(item.Attributes.ContainsKey("exception")).IsFalse();
+            await Assert.That(item.Attributes.ContainsKey("stackTrace")).IsFalse();
         }
 
-        [Fact]
-        public void LinkingMetadataIsUnrolledIntoAttributes()
+        [Test]
+        public async Task LinkingMetadataIsUnrolledIntoAttributes()
         {
             var linkingMetadata = new DictionaryValue(new[]
             {
@@ -90,17 +90,17 @@ namespace Serilog.Sinks.NewRelic.Logs.Tests
             var properties = new[] { new LogEventProperty("newrelic.linkingmetadata", linkingMetadata) };
             var item = new NewRelicLogItem(CreateEvent(LogEventLevel.Information, properties: properties), null);
 
-            Assert.Equal("abc", item.Attributes["trace.id"]);
-            Assert.Equal("def", item.Attributes["span.id"]);
-            Assert.False(item.Attributes.ContainsKey("newrelic.linkingmetadata"));
+            await Assert.That(item.Attributes["trace.id"]).IsEqualTo("abc");
+            await Assert.That(item.Attributes["span.id"]).IsEqualTo("def");
+            await Assert.That(item.Attributes.ContainsKey("newrelic.linkingmetadata")).IsFalse();
         }
 
-        [Fact]
-        public void PayloadCarriesTheApplicationName()
+        [Test]
+        public async Task PayloadCarriesTheApplicationName()
         {
             var payload = new NewRelicLogPayload("Slido for Windows");
 
-            Assert.Equal("Slido for Windows", payload.Common.Attributes["application"]);
+            await Assert.That(payload.Common.Attributes["application"]).IsEqualTo("Slido for Windows");
         }
 
         private static LogEvent CreateEvent(
