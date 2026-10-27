@@ -1,7 +1,7 @@
-[![Build Status](https://barradas.visualstudio.com/Contributions/_apis/build/status/NugetPackage/Serilog%20Sinks%20NewRelic%20Logs?branchName=master)](https://barradas.visualstudio.com/Contributions/_build/latest?definitionId=8&branchName=master)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/Serilog.Sinks.NewRelic.Logs.svg)](https://www.nuget.org/packages/Serilog.Sinks.NewRelic.Logs/)
-[![NuGet Version](https://img.shields.io/nuget/v/Serilog.Sinks.NewRelic.Logs.svg)](https://www.nuget.org/packages/Serilog.Sinks.NewRelic.Logs/)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=ThiagoBarradas_serilog-sinks-newrelic-logs&metric=alert_status)](https://sonarcloud.io/dashboard?id=ThiagoBarradas_serilog-sinks-newrelic-logs)
+[![Build Status](https://github.com/slidoapp/serilog-sinks-newrelic-logs/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/slidoapp/serilog-sinks-newrelic-logs/actions/workflows/build.yml)
+[![Release Status](https://github.com/slidoapp/serilog-sinks-newrelic-logs/actions/workflows/release.yml/badge.svg)](https://github.com/slidoapp/serilog-sinks-newrelic-logs/actions/workflows/release.yml)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/Slido.Serilog.Sinks.NewRelic.Logs.svg)](https://www.nuget.org/packages/Slido.Serilog.Sinks.NewRelic.Logs/)
+[![NuGet Version](https://img.shields.io/nuget/v/Slido.Serilog.Sinks.NewRelic.Logs.svg)](https://www.nuget.org/packages/Slido.Serilog.Sinks.NewRelic.Logs/)
 
 A Serilog sink that writes events to the [NewRelic Logs](https://docs.newrelic.com/docs/logs/new-relic-logs/get-started/introduction-new-relic-logs).
 
@@ -50,7 +50,7 @@ If `newrelic.linkingmetadata` property is present in an event, it will be unroll
 ## Install via NuGet
 
 ```
-PM> Install-Package Serilog.Sinks.NewRelic.Logs
+PM> Install-Package Slido.Serilog.Sinks.NewRelic.Logs
 ```
 
 ### JSON configuration
