@@ -15,6 +15,8 @@
     <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
     <ProjectGuid>{E2CEBBAF-6DF7-4AA9-815D-9AD4CF90C844}</ProjectGuid>
     <Version>1.2.2</Version>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)slido-oss-identity.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>
